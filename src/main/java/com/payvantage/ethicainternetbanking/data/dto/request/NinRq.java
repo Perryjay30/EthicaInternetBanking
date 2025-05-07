@@ -3,19 +3,25 @@ package com.payvantage.ethicainternetbanking.data.dto.request;
 import com.payvantage.ethicainternetbanking.data.model.UserTable;
 import lombok.Data;
 
-@Data
+
 public class NinRq {
 
     private String number;
     private String image;
 
-
-    public NinRq() {
+    public String getNumber() {
+        return number;
     }
 
-    public NinRq(UserTable userTable) {
+    public void setNumber(String number) {
+        this.number = number;
+    }
 
-        this.number = userTable.getBvn();
+    public String getImage() {
+        return image;
+    }
 
+    public void setImage(String image) {
+        this.image = image;
     }
 }

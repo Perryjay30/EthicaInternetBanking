@@ -2,7 +2,9 @@ package com.payvantage.ethicainternetbanking.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.payvantage.ethicainternetbanking.data.dto.request.BvnRequest;
+import com.payvantage.ethicainternetbanking.data.dto.request.NinRq;
 import com.payvantage.ethicainternetbanking.data.dto.response.BvnResponse;
+import com.payvantage.ethicainternetbanking.data.dto.response.NinResponse;
 import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Service;
 import java.net.URI;
@@ -60,5 +62,43 @@ public class IdentityVerificationServiceImpl implements IdentityVerificationServ
             return bvnResponse;
         }
 
+    }
+
+    @Override
+    public NinResponse verifyNin(NinRq ninRq) {
+        NinResponse ninResponse = new NinResponse();
+        try {
+            HttpClient client = HttpClient.newBuilder()
+                    .connectTimeout(Duration.ofSeconds(10))
+                    .build();
+
+            ObjectMapper objectMapper = new ObjectMapper();
+            String requestBody = "image=" + ninRq.getImage() + "&number=" + URLEncoder.encode(ninRq.getNumber(), StandardCharsets.UTF_8);
+
+            HttpRequest httpRequest = HttpRequest.newBuilder()
+                    .uri(URI.create(environment.getProperty("prembly.base.url") + "identitypass/verification/nin_w_face"))
+                    .header("accept", "application/json")
+                    .header("x-api-key", environment.getProperty("prembly.x.api.key"))
+                    .header("app-id", environment.getProperty("prembly.app.id"))
+                    .header("Content-Type", "application/x-www-form-urlencoded")
+                    .POST(HttpRequest.BodyPublishers.ofString(requestBody))
+                    .build();
+
+            HttpResponse<String> response = client.send(httpRequest, HttpResponse.BodyHandlers.ofString());
+            if (response.statusCode() == 200) {
+                System.out.println("Success response body for Nin Verification: " + response.body());
+                String responseBody = response.body();
+                return objectMapper.readValue(responseBody, NinResponse.class);
+            } else {
+                ninResponse.setDetail("Unable to verify nin!!");
+                ninResponse.setResponseCode("400");
+                return ninResponse;
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+            ninResponse.setResponseCode("400");
+            ninResponse.setDetail("An error occurred while consuming the API: " + e.getMessage());
+            return ninResponse;
+        }
     }
 }

@@ -24,6 +24,9 @@ public class NinResponse {
 
     private Map<String, Object> session;
 
+    @JsonProperty("widget_info")
+    private Map<String, Object> widgetInfo;
+
     @JsonProperty("endpoint_name")
     private String endpointName;
 
@@ -91,6 +94,14 @@ public class NinResponse {
 
     public void setEndpointName(String endpointName) {
         this.endpointName = endpointName;
+    }
+
+    public Map<String, Object> getWidgetInfo() {
+        return widgetInfo;
+    }
+
+    public void setWidgetInfo(Map<String, Object> widgetInfo) {
+        this.widgetInfo = widgetInfo;
     }
 
     public static class Verification {
