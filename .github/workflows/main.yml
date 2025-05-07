@@ -1,0 +1,50 @@
+name: deploy
+on:
+  push:
+    branches:    
+      - 'main' 
+  workflow_dispatch: 
+    inputs: 
+      deployment_notes: 
+        description: "Deployment notes."
+        required: true
+
+jobs:
+  my-app:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v2
+      - name: Set up Java 17
+        uses: actions/setup-java@v3
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+      - name: Login to Docker Hub 
+        uses: docker/login-action@v2
+        with:
+          registry: ${{ secrets.DOCKER_REGISTRY_URL }}
+          username: ${{ secrets.DOCKER_REGISTRY_USERNAME }}
+          password: ${{ secrets.DOCKER_REGISTRY_PASSWORD }}
+      - name: Build application
+        run: |
+          mvn clean package -DskipTests
+      - name: Build the docker image and push 
+        uses: docker/build-push-action@v2
+        with:
+          context: .
+          file: ./Dockerfile
+          push: true
+          tags: ${{ secrets.DOCKER_REGISTRY_URL }}/ethica-internet-banking-api:latest
+          build-args: |
+            --no-cache
+            --progress=plain
+      - name: Deploy application
+        uses: appleboy/ssh-action@master
+        with:       
+          host: ${{ secrets.SERVER_IP_ADDRESS }}        
+          username: ${{ secrets.SERVER_IP_USERNAME }}      
+          password: ${{ secrets.SERVER_IP_PASSWORD }}
+          port: 22
+          script: |
+            docker pull ${{ secrets.DOCKER_REGISTRY_URL }}/ethica-internet-banking-api:latest
+            docker service update --force --constraint-add 'node.hostname == frontcore' ethica-internet-banking-api
