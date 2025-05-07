@@ -1,5 +1,6 @@
 package com.payvantage.ethicainternetbanking.data.model;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
@@ -43,7 +44,8 @@ public class NinData {
     private String self_origin_lga;
     private String self_origin_place;
     private String self_origin_state;
-//    private String signature;
+    @JsonIgnore
+    private String signature;
     private String spoken_language;
     private String nok_address1;
     private String nok_address2;
@@ -65,10 +67,6 @@ public class NinData {
     @OneToOne(cascade = CascadeType.ALL)
     @JoinColumn(name = "face_data_id", referencedColumnName = "id")
     private FaceData face_data;
-
-    public NinData() {
-
-    }
 
     public Long getId() {
         return id;
@@ -294,6 +292,14 @@ public class NinData {
         this.self_origin_state = self_origin_state;
     }
 
+    public String getSignature() {
+        return signature;
+    }
+
+    public void setSignature(String signature) {
+        this.signature = signature;
+    }
+
     public String getSpoken_language() {
         return spoken_language;
     }
@@ -446,14 +452,6 @@ public class NinData {
         this.face_data = face_data;
     }
 
-//    public String getSignature() {
-//        return signature;
-//    }
-//
-//    public void setSignature(String signature) {
-//        this.signature = signature;
-//    }
-
     public NinData(NinData ninData) {
         this.id = ninData.id;
         this.title = ninData.title;
@@ -483,7 +481,7 @@ public class NinData {
         this.self_origin_lga = ninData.self_origin_lga;
         this.self_origin_place = ninData.self_origin_place;
         this.self_origin_state = ninData.self_origin_state;
-//        this.signature = ninData.signature;
+        this.signature = ninData.signature;
         this.spoken_language = ninData.spoken_language;
         this.nok_address1 = ninData.nok_address1;
         this.nok_address2 = ninData.nok_address2;
@@ -503,5 +501,9 @@ public class NinData {
         this.userid = ninData.userid;
         this.vnin = ninData.vnin;
         this.face_data = ninData.face_data;
+    }
+
+    public NinData() {
+
     }
 }

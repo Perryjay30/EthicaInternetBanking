@@ -18,8 +18,8 @@ public class FaceData {
     private String bvn;
     @JsonIgnore
     private String nin;
-    @OneToOne
-    NinData ninData;
+//    @OneToOne
+//    NinData ninData;
 
     public Long getId() {
         return id;
