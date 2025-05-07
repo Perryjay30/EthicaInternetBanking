@@ -15,7 +15,6 @@ import java.io.Serializable;
  * 
  */
 
-@Data
 public class BaseResponse implements Serializable {
     
     public int statusCode;
@@ -32,5 +31,36 @@ public class BaseResponse implements Serializable {
     private boolean pending;
     @JsonIgnore
     private CommisionRpData commisionRpData;
-    
+
+    public int getStatusCode() {
+        return statusCode;
+    }
+
+    public void setStatusCode(int statusCode) {
+        this.statusCode = statusCode;
+    }
+
+    public String getDescription() {
+        return description;
+    }
+
+    public void setDescription(String description) {
+        this.description = description;
+    }
+
+    public Object getData() {
+        return data;
+    }
+
+    public void setData(Object data) {
+        this.data = data;
+    }
+
+    public Object getErrors() {
+        return errors;
+    }
+
+    public void setErrors(Object errors) {
+        this.errors = errors;
+    }
 }

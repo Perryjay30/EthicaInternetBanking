@@ -1,7 +1,6 @@
 package com.payvantage.ethicainternetbanking.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.SerializationFeature;
 import com.payvantage.ethicainternetbanking.data.dto.request.BvnRequest;
 import com.payvantage.ethicainternetbanking.data.dto.response.BvnResponse;
 import org.springframework.core.env.Environment;
@@ -32,8 +31,6 @@ public class IdentityVerificationServiceImpl implements IdentityVerificationServ
                     .build();
 
             ObjectMapper objectMapper = new ObjectMapper();
-//            objectMapper.configure(SerializationFeature.FAIL_ON_EMPTY_BEANS, false);
-//            String requestBody = objectMapper.writeValueAsString(bvnRequest);
             String requestBody = "number=" + URLEncoder.encode(bvnRequest.getBvn(), StandardCharsets.UTF_8);
 
             HttpRequest httpRequest = HttpRequest.newBuilder()
