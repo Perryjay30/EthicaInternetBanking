@@ -73,7 +73,7 @@ public class IdentityVerificationServiceImpl implements IdentityVerificationServ
                     .build();
 
             ObjectMapper objectMapper = new ObjectMapper();
-            String requestBody = "image=" + ninRq.getImage() + "&number=" + URLEncoder.encode(ninRq.getNumber(), StandardCharsets.UTF_8);
+            String requestBody = "image=" + ninRq.getImage() + "&number=" + ninRq.getNumber();
 
             HttpRequest httpRequest = HttpRequest.newBuilder()
                     .uri(URI.create(environment.getProperty("prembly.base.url") + "identitypass/verification/nin_w_face"))

@@ -1,14 +1,14 @@
 package com.payvantage.ethicainternetbanking.controller;
 
 import com.payvantage.ethicainternetbanking.data.dto.request.BvnVerificationRequest;
+import com.payvantage.ethicainternetbanking.data.dto.request.NinRequest;
 import com.payvantage.ethicainternetbanking.data.dto.request.NinRq;
+import com.payvantage.ethicainternetbanking.security.JWTHelper;
 import com.payvantage.ethicainternetbanking.service.IdentityVerificationService;
 import com.payvantage.ethicainternetbanking.service.OnboardingService;
+import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.PostMapping;
-import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("/onboarding")
@@ -16,11 +16,11 @@ public class OnboardingController {
 
     private final OnboardingService onboardingService;
 
-    private final IdentityVerificationService identityVerificationService;
+    private final JWTHelper jwtHelper;
 
-    public OnboardingController(OnboardingService onboardingService, IdentityVerificationService identityVerificationService) {
+    public OnboardingController(OnboardingService onboardingService, JWTHelper jwtHelper) {
         this.onboardingService = onboardingService;
-        this.identityVerificationService = identityVerificationService;
+        this.jwtHelper = jwtHelper;
     }
 
     @PostMapping("/bvnVerification")
@@ -29,7 +29,8 @@ public class OnboardingController {
     }
 
     @PostMapping("/ninVerification")
-    public ResponseEntity<?> ninVerification(@RequestBody NinRq ninRq) {
-        return ResponseEntity.ok(identityVerificationService.verifyNin(ninRq));
+    public ResponseEntity<?> ninVerification(@Valid @RequestHeader String authorization, @RequestBody NinRequest ninRequest) {
+        Long id = Long.valueOf(jwtHelper.getClaim(authorization, "userId"));
+        return ResponseEntity.ok(onboardingService.ninVerification(id, ninRequest));
     }
 }

@@ -2,11 +2,15 @@ package com.payvantage.ethicainternetbanking.service;
 
 import com.payvantage.ethicainternetbanking.data.dto.request.BvnRequest;
 import com.payvantage.ethicainternetbanking.data.dto.request.BvnVerificationRequest;
+import com.payvantage.ethicainternetbanking.data.dto.request.NinRequest;
+import com.payvantage.ethicainternetbanking.data.dto.request.NinRq;
 import com.payvantage.ethicainternetbanking.data.dto.response.BaseResponse;
 import com.payvantage.ethicainternetbanking.data.dto.response.BvnResponse;
-import com.payvantage.ethicainternetbanking.data.model.BvnData;
-import com.payvantage.ethicainternetbanking.data.model.UserTable;
+import com.payvantage.ethicainternetbanking.data.dto.response.NinResponse;
+import com.payvantage.ethicainternetbanking.data.model.*;
 import com.payvantage.ethicainternetbanking.repository.BvnDataRepository;
+import com.payvantage.ethicainternetbanking.repository.FaceDataRepository;
+import com.payvantage.ethicainternetbanking.repository.NinDataRepository;
 import com.payvantage.ethicainternetbanking.repository.UserRepository;
 import com.payvantage.ethicainternetbanking.security.JWTHelper;
 import lombok.extern.slf4j.Slf4j;
@@ -15,10 +19,7 @@ import org.springframework.stereotype.Service;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
-import java.util.HashMap;
-import java.util.Locale;
-import java.util.Map;
-import java.util.Optional;
+import java.util.*;
 
 @Service
 @Slf4j
@@ -29,12 +30,19 @@ public class OnboardingServiceImpl implements OnboardingService {
     private final UserRepository userRepository;
 
     private final JWTHelper jwtHelper;
+
+    private final NinDataRepository ninDataRepository;
+
+    private final FaceDataRepository faceDataRepository;
+
     private final IdentityVerificationService identityVerificationService;
 
-    public OnboardingServiceImpl(BvnDataRepository bvnDataRepository, UserRepository userRepository, JWTHelper jwtHelper, IdentityVerificationService identityVerificationService) {
+    public OnboardingServiceImpl(BvnDataRepository bvnDataRepository, UserRepository userRepository, JWTHelper jwtHelper, NinDataRepository ninDataRepository, FaceDataRepository faceDataRepository, IdentityVerificationService identityVerificationService) {
         this.bvnDataRepository = bvnDataRepository;
         this.userRepository = userRepository;
         this.jwtHelper = jwtHelper;
+        this.ninDataRepository = ninDataRepository;
+        this.faceDataRepository = faceDataRepository;
         this.identityVerificationService = identityVerificationService;
     }
 
@@ -134,10 +142,90 @@ public class OnboardingServiceImpl implements OnboardingService {
             return baseResponse;
         } catch (Exception ex) {
             ex.printStackTrace();
-//            log.info("An error occurred while verifying bvn {}", ex.getMessage());
+            log.info("An error occurred while verifying bvn {}", ex.getMessage());
             baseResponse.setDescription("Unable to verify BVN, try again later");
             baseResponse.setStatusCode(400);
         }
+        return baseResponse;
+    }
+
+    @Override
+    public BaseResponse ninVerification(Long id, NinRequest ninRq) {
+        BaseResponse baseResponse = new BaseResponse();
+        baseResponse.setStatusCode(500);
+        baseResponse.setDescription("An error occurred");
+        try {
+            String nin = ninRq.getNin();
+            System.out.println(nin);
+
+            if (nin.isEmpty()) {
+                baseResponse.setStatusCode(400);
+                baseResponse.setDescription("nin cannot be empty");
+                return baseResponse;
+            }
+
+            NinRq ninRq1 = new NinRq();
+            ninRq1.setNumber(ninRq.getNin());
+            ninRq1.setImage(ninRq.getImage());
+
+            NinData ninRpData = null;
+            Optional<NinData> optNinRpData = ninDataRepository.findByNin(ninRq1.getNumber());
+            Optional<UserTable> optionalUserTable = userRepository.findById(id);
+            if (optionalUserTable.isPresent() && optionalUserTable.get().getNin() != null && optionalUserTable.get().getTranxPin() != null) {
+                baseResponse.setDescription("NIN already linked to a user, kindly proceed to login if you're the user!!");
+                baseResponse.setStatusCode(200);
+                return baseResponse;
+            } else if (optionalUserTable.isPresent() && optionalUserTable.get().getNin() != null && optionalUserTable.get().getTranxPin() == null) {
+                baseResponse.setDescription("NIN already verified, Verify your phone number!!");
+                Map<String, String> resp = new HashMap<>();
+                String auth = jwtHelper.createShortLiveToken(String.valueOf(optionalUserTable.get().getId()), optionalUserTable.get().getNin(), 30);
+                resp.put("jwt", auth);
+                baseResponse.setData(resp);
+                baseResponse.setStatusCode(200);
+                return baseResponse;
+            }
+
+            boolean faceVerification;
+            if (optNinRpData.isEmpty()) {
+                NinResponse ninRp = identityVerificationService.verifyNin(ninRq1);
+                System.out.println(ninRp.toString());
+                ninRpData = new NinData(ninRp.getNin_data());
+                ninDataRepository.save(ninRpData);
+                FaceData faceData = new FaceData();
+                faceData.setNin(nin);
+                faceVerification = faceData.isStatus();
+                faceData.setConfidence(ninRp.getFace_data().getConfidence());
+                faceData.setMessage(ninRp.getFace_data().getMessage());
+                faceDataRepository.save(faceData);
+                baseResponse.setDescription("NIN " + ninRp.getVerification().getStatus());
+            } else {
+                baseResponse.setStatusCode(400);
+                baseResponse.setDescription("NIN already verified, Verify your phone number!!");
+                return baseResponse;
+            }
+
+            UserTable existingUser = optionalUserTable.get();
+            UserGender gender = Objects.equals(ninRpData.getGender(), "m") ? UserGender.MALE : UserGender.FEMALE;
+            existingUser.setNin(nin);
+            existingUser.setFaceVerification(faceVerification);
+            existingUser.setNinVerified(true);
+            existingUser.setGender(gender);
+            existingUser.setResidentialAddress(ninRpData.getResidence_address());
+            userRepository.save(existingUser);
+
+            Map<String, String> resp = new HashMap<>();
+            String auth = jwtHelper.createShortLiveToken(String.valueOf(existingUser.getId()), existingUser.getNin(), 30);
+            baseResponse.setDescription("NIN verified successfully");
+            resp.put("jwt", auth);
+            baseResponse.setData(resp);
+            baseResponse.setStatusCode(200);
+            return baseResponse;
+        } catch (Exception ex) {
+            ex.printStackTrace();
+            log.info("An error occurred while verifying nin {}", ex.getMessage());
+            baseResponse.setDescription("Unable to verify NIN, try again later");
+        }
+
         return baseResponse;
     }
 }

@@ -4,12 +4,9 @@ import jakarta.validation.constraints.NotNull;
 import lombok.Data;
 
 @Data
-public class NinDto {
+public class NinRequest {
     @NotNull
-
     private String nin;
-    @NotNull
-    private String deviceId;
-    private String dateOfBirth;
+//    private String dateOfBirth;
     private String image;
 }
