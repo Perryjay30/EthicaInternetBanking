@@ -11,7 +11,7 @@ import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("/onboarding")
-@CrossOrigin(origins = "https://internetbanking.payvantageapi.com", allowedHeaders = "*", methods = {RequestMethod.GET, RequestMethod.POST, RequestMethod.PUT, RequestMethod.DELETE})
+@CrossOrigin(origins = "*", allowedHeaders = "*", methods = {RequestMethod.GET, RequestMethod.POST, RequestMethod.PUT, RequestMethod.DELETE})
 public class OnboardingController {
 
     private final OnboardingService onboardingService;
@@ -63,5 +63,10 @@ public class OnboardingController {
         BaseResponse responseData = onboardingService.verifyEmail(phoneAndEmailVerificationRequest);
         HttpStatus httpStatus = (responseData.getStatusCode() == 200) ? HttpStatus.OK : HttpStatus.BAD_REQUEST;
         return new ResponseEntity<>(responseData, httpStatus);
+    }
+
+    @RequestMapping(value = "/**", method = RequestMethod.OPTIONS)
+    public ResponseEntity<Void> handleOptionsRequest() {
+        return ResponseEntity.ok().build();
     }
 }
