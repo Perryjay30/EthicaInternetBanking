@@ -11,7 +11,6 @@ import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("/onboarding")
-@CrossOrigin(origins = "*", allowedHeaders = "*", methods = {RequestMethod.GET, RequestMethod.POST, RequestMethod.PUT, RequestMethod.DELETE})
 public class OnboardingController {
 
     private final OnboardingService onboardingService;
@@ -65,8 +64,8 @@ public class OnboardingController {
         return new ResponseEntity<>(responseData, httpStatus);
     }
 
-    @RequestMapping(value = "/**", method = RequestMethod.OPTIONS)
-    public ResponseEntity<Void> handleOptionsRequest() {
-        return ResponseEntity.ok().build();
-    }
+//    @RequestMapping(value = "/**", method = RequestMethod.OPTIONS)
+//    public ResponseEntity<Void> handleOptionsRequest() {
+//        return ResponseEntity.ok().build();
+//    }
 }
