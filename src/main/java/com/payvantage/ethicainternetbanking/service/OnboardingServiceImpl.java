@@ -1,18 +1,16 @@
 package com.payvantage.ethicainternetbanking.service;
 
-import com.payvantage.ethicainternetbanking.data.dto.request.BvnRequest;
-import com.payvantage.ethicainternetbanking.data.dto.request.BvnVerificationRequest;
-import com.payvantage.ethicainternetbanking.data.dto.request.NinRequest;
-import com.payvantage.ethicainternetbanking.data.dto.request.NinRq;
+import com.google.gson.Gson;
+import com.google.gson.JsonObject;
+import com.payvantage.ethicainternetbanking.data.dto.request.*;
 import com.payvantage.ethicainternetbanking.data.dto.response.BaseResponse;
 import com.payvantage.ethicainternetbanking.data.dto.response.BvnResponse;
 import com.payvantage.ethicainternetbanking.data.dto.response.NinResponse;
 import com.payvantage.ethicainternetbanking.data.model.*;
-import com.payvantage.ethicainternetbanking.repository.BvnDataRepository;
-import com.payvantage.ethicainternetbanking.repository.FaceDataRepository;
-import com.payvantage.ethicainternetbanking.repository.NinDataRepository;
-import com.payvantage.ethicainternetbanking.repository.UserRepository;
+import com.payvantage.ethicainternetbanking.repository.*;
 import com.payvantage.ethicainternetbanking.security.JWTHelper;
+import com.payvantage.ethicainternetbanking.utils.AppConfig;
+import com.payvantage.ethicainternetbanking.utils.AppUtils;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
@@ -20,6 +18,8 @@ import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.*;
+
+import static com.payvantage.ethicainternetbanking.utils.AppConstant.*;
 
 @Service
 @Slf4j
@@ -37,13 +37,25 @@ public class OnboardingServiceImpl implements OnboardingService {
 
     private final IdentityVerificationService identityVerificationService;
 
-    public OnboardingServiceImpl(BvnDataRepository bvnDataRepository, UserRepository userRepository, JWTHelper jwtHelper, NinDataRepository ninDataRepository, FaceDataRepository faceDataRepository, IdentityVerificationService identityVerificationService) {
+    private final AppUtils appUtils;
+
+    private final NotificationService notificationService;
+
+    private final OtpRepository otpRepository;
+
+    private final AppConfig appConfig;
+
+    public OnboardingServiceImpl(BvnDataRepository bvnDataRepository, UserRepository userRepository, JWTHelper jwtHelper, NinDataRepository ninDataRepository, FaceDataRepository faceDataRepository, IdentityVerificationService identityVerificationService, AppUtils appUtils, NotificationService notificationService, OtpRepository otpRepository, AppConfig appConfig) {
         this.bvnDataRepository = bvnDataRepository;
         this.userRepository = userRepository;
         this.jwtHelper = jwtHelper;
         this.ninDataRepository = ninDataRepository;
         this.faceDataRepository = faceDataRepository;
         this.identityVerificationService = identityVerificationService;
+        this.appUtils = appUtils;
+        this.notificationService = notificationService;
+        this.otpRepository = otpRepository;
+        this.appConfig = appConfig;
     }
 
     @Override
@@ -227,5 +239,308 @@ public class OnboardingServiceImpl implements OnboardingService {
         }
 
         return baseResponse;
+    }
+
+    @Override
+    public BaseResponse initializeSignUpWithPhoneNumber(Long id, String phoneNumber) {
+        BaseResponse responseData = new BaseResponse();
+        responseData.setStatusCode(200);
+        responseData.setDescription("An error occurred, try again later");
+        try{
+            Optional<UserTable> userTableOptional = userRepository.findById(id);
+            if (userTableOptional.isPresent()) {
+                String cleanedPhoneNumber = phoneNumber
+                        .substring(phoneNumber.length() - 10);
+                Map<Object, Object> resp = new HashMap<>();
+
+                String msg = "Otp has been sent to the ";
+                String maskePhonenumber = "";
+                maskePhonenumber = appUtils.maskedPhoneNumber(cleanedPhoneNumber);
+                msg += "phonenumber " + maskePhonenumber;
+                userTableOptional = userRepository.findByPhoneNumber(phoneNumber);
+                if(userTableOptional.isPresent()) {
+                    BaseResponse otpResponse = appUtils.generateToken(phoneNumber, 30);
+                    JsonObject otpResponseData = new Gson().fromJson(new Gson()
+                                    .toJson(otpResponse.getData()),
+                            JsonObject.class);
+                    String otp = otpResponseData.get("otp").getAsString();
+                    String requestId = otpResponseData.get("requestId").getAsString();
+
+                    resp.put("msg", msg);
+                    resp.put("requestId", requestId);
+
+                    String optMsg = "Your otp is " + otp;
+                    System.out.println(optMsg);
+                    responseData.setStatusCode(SUCCESS_STATUS_CODE);
+                    responseData.setDescription(SUCCESS_STATUS_MESSAGE);
+                    responseData.setData(resp);
+                    return responseData;
+                }
+
+                Optional<UserTable> optionalUserTable = userRepository.findByPhoneNumberAndActiveTrue(cleanedPhoneNumber);
+                if(optionalUserTable.isPresent() && optionalUserTable.get().getTranxPin() != null) {
+                    responseData.setDescription("account already created, kindly login");
+                    responseData.setStatusCode(201);
+                    return responseData;
+                }
+
+                Optional<UserTable> optionalUser = userRepository.findByPhoneNumberAndPhoneNumberVerifiedTrue(cleanedPhoneNumber);
+                if(optionalUser.isPresent()){
+                    UserTable existingUser = optionalUser.get();
+                    String requestId = existingUser.getId().toString();
+                    boolean phoneNumberVerified = existingUser.isPhoneNumberVerified();
+
+                    String jwToken = jwtHelper.createShortLiveToken(requestId, cleanedPhoneNumber, 30);
+                    Map<Object, Object> map = new HashMap<Object, Object>();
+                    map.put("phoneNumber", cleanedPhoneNumber);
+                    map.put("jwtToken", jwToken);
+                    map.put("phoneNumberVerified", phoneNumberVerified);
+                    responseData.setDescription("PhoneNumber already verified, proceed to email verification");
+                    responseData.setStatusCode(210);
+                    responseData.setData(map);
+                    return responseData;
+                } else {
+                    BaseResponse otpResponse = appUtils.generateToken(cleanedPhoneNumber,30);
+                    JsonObject otpResponseData = new Gson().fromJson(new Gson()
+                                    .toJson(otpResponse.getData()),
+                            JsonObject.class);
+                    String otp = otpResponseData.get("otp").getAsString();
+                    String requestId = otpResponseData.get("requestId").getAsString();
+//                    Optional<InitializeSignUp> existingInit = initializeSignUpRepo.findByPhoneNumber(cleanedPhoneNumber);
+//                    InitializeSignUp initSignUp;
+//
+//                    if (existingInit.isPresent()) {
+//                        initSignUp = existingInit.get();
+//                        initSignUp.setPhoneNumber(cleanedPhoneNumber);
+//                    } else {
+//                        initSignUp = new InitializeSignUp();
+//                        initSignUp.setPhoneNumber(cleanedPhoneNumber);
+//                    }
+//                    initializeSignUpRepo.save(initSignUp);
+                    String optMsg = "Your otp is " + otp;
+                    notificationService.sendSms(phoneNumber, otp);
+
+                    resp.put("msg", msg);
+                    resp.put("requestId", requestId);
+
+                    System.out.println(optMsg);
+                    responseData.setData(resp);
+                    responseData.setDescription("OTP token sent successfully!!");
+                    responseData.setStatusCode(SUCCESS_STATUS_CODE);
+                    return responseData;
+                }
+            } else {
+                responseData.setDescription("User not found!!");
+                responseData.setStatusCode(VALDATION_STATUS_CODE);
+                return responseData;
+            }
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return responseData;
+    }
+
+    @Override
+    public BaseResponse verifyPhoneNumber(Long id, PhoneAndEmailVerificationRequest phoneAndEmailVerificationRequest) {
+        BaseResponse responseData = new BaseResponse();
+        responseData.setStatusCode(VALDATION_STATUS_CODE);
+        responseData.setDescription(DEFAULT_STATUS_MESSAGE);
+        try {
+            Optional<UserTable> userTableOptional = userRepository.findById(id);
+            if (userTableOptional.isPresent()) {
+                String phonenumber = phoneAndEmailVerificationRequest.getPhoneNumber()
+                        .substring(phoneAndEmailVerificationRequest.getPhoneNumber().length() - 10);
+
+                UserTable userTable = userTableOptional.get();
+
+                Optional<OtpEntity> optOtpEntity = otpRepository.findByUsername(phonenumber);
+
+                if (optOtpEntity.isEmpty()) {
+                    responseData.setDescription("Phone Number is not valid");
+                    return responseData;
+                }
+
+                OtpEntity otpEntity = optOtpEntity.get();
+                String encOtp = otpEntity.getOtp();
+
+                if (!phoneAndEmailVerificationRequest.getOtp().equals(encOtp)) {
+                    responseData.setDescription("Please enter a valid code");
+                    return responseData;
+                }
+
+                Calendar cal = Calendar.getInstance();
+                Long now = cal.getTimeInMillis();
+                if (now > otpEntity.getExpiryTime()) {
+                    responseData.setDescription("Sorry. the code you entered has expired");
+                    return responseData;
+                }
+
+                String username = otpEntity.getUsername();
+                userTable.setPhoneNumber(username);
+                userTable.setPhoneNumberVerified(true);
+                Long requestId = userRepository.save(userTable).getId();
+                String jwToken = jwtHelper.createShortLiveToken(String.valueOf(requestId), username, 30);
+                Map map = new HashMap();
+                map.put("phoneNumber", username);
+                map.put("jwtToken", jwToken);
+                map.put("requestId", requestId);
+
+                otpRepository.delete(otpEntity);
+
+                responseData.setStatusCode(SUCCESS_STATUS_CODE);
+                responseData.setDescription("Phone number verified successfully");
+                responseData.setData(map);
+            } else {
+                responseData.setDescription("User not found!!");
+                responseData.setStatusCode(VALDATION_STATUS_CODE);
+                return responseData;
+            }
+
+        } catch (Exception ex) {
+            ex.printStackTrace();
+        }
+        return responseData;
+    }
+
+    @Override
+    public BaseResponse initializeSignUpWithEmailAddress(String emailAddress, Long Id) {
+        BaseResponse responseData = new BaseResponse();
+        responseData.setStatusCode(VALDATION_STATUS_CODE);
+        responseData.setDescription(DEFAULT_STATUS_MESSAGE);
+
+        try{
+            Optional<UserTable> optionalUserTable = userRepository.findByEmailAndActiveTrue(emailAddress);
+            if(optionalUserTable.isPresent()  && optionalUserTable.get().getTranxPin() != null) {
+                responseData.setDescription("account already created, kindly login");
+                responseData.setStatusCode(201);
+                return responseData;
+            }
+
+            Optional<UserTable> optionalUser = userRepository.findByEmailAndEmailVerifiedTrue(emailAddress);
+            if(optionalUser.isPresent()) {
+                UserTable existingUser = optionalUser.get();
+                String requestId = existingUser.getId().toString();
+                boolean emailVerified = existingUser.isEmailVerified();
+                String phoneNumber = existingUser.getPhoneNumber();
+                String jwToken = jwtHelper.createShortLiveToken(requestId, phoneNumber, 30);
+                Map map = new HashMap();
+                map.put("emailAddress", emailAddress);
+                map.put("jwtToken", jwToken);
+                map.put("emailVerified", emailVerified);
+                responseData.setDescription("Email already verified, proceed to next stage");
+                responseData.setStatusCode(202);
+                responseData.setData(map);
+                return responseData;
+            }
+            String msg = "Otp has been sent to the ";
+            String maskeEmail = "";
+            if (emailAddress != null) {
+                maskeEmail = appUtils.maskedEmail(emailAddress);
+                msg += "email " + maskeEmail;
+            }
+            Map resp = new HashMap<>();
+
+            Optional<UserTable> findUser = userRepository.findById(Id);
+            UserTable userTable = findUser.get();
+
+
+            Optional<UserTable> optionUser = userRepository.findByEmailAndEmailVerifiedFalse(emailAddress);
+            if (optionUser.isPresent()) {
+                UserTable existingUser = optionUser.get();
+                existingUser.setEmail(emailAddress);
+                userRepository.save(existingUser);
+            } else {
+                userTable.setEmail(emailAddress);
+                userRepository.save(userTable);
+            }
+
+            if(findUser.isEmpty()) {
+                responseData.setDescription("user cannot be found");
+                responseData.setStatusCode(DEFAULT_STATUS_CODE);
+                return responseData;
+            }
+
+            BaseResponse otpResponse = appUtils.generateToken(emailAddress, 30);
+            JsonObject otpResponseData = new Gson().fromJson(new Gson()
+                            .toJson(otpResponse.getData()),
+                    JsonObject.class);
+            String otp = otpResponseData.get("otp").getAsString();
+            String requestId = otpResponseData.get("requestId").getAsString();
+
+            resp.put("msg", msg);
+            resp.put("requestId", userTable.getId());
+            responseData.setData(resp);
+            String optMsg = "Your otp is " + otp;
+            notificationService.sendEmail(emailAddress, otp);
+            System.out.println(optMsg);
+            responseData.setDescription("OTP token sent successfully!!");
+            responseData.setStatusCode(SUCCESS_STATUS_CODE);
+            return responseData;
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return responseData;
+    }
+
+    public BaseResponse verifyEmail(PhoneAndEmailVerificationRequest phoneAndEmailVerificationRequest) {
+        BaseResponse responseData = new BaseResponse();
+        responseData.setStatusCode(VALDATION_STATUS_CODE);
+        responseData.setDescription(DEFAULT_STATUS_MESSAGE);
+        try {
+            String email = appUtils.cleanText(phoneAndEmailVerificationRequest.getEmail());
+
+            Optional<OtpEntity> optOtpEntity = otpRepository.findByUsername(phoneAndEmailVerificationRequest.getEmail());
+
+            if (optOtpEntity.isEmpty()) {
+                responseData.setDescription("Email is not valid");
+                return responseData;
+            }
+            OtpEntity otpEntity = optOtpEntity.get();
+            String encOtp = otpEntity.getOtp();
+
+
+            if (!phoneAndEmailVerificationRequest.getOtp().equals(encOtp)) {
+                responseData.setDescription("Please enter a valid code");
+                return responseData;
+            }
+
+            Calendar cal = Calendar.getInstance();
+            Long now = cal.getTimeInMillis();
+            if (now > otpEntity.getExpiryTime()) {
+                responseData.setDescription("Sorry. the code you entered has expired");
+                return responseData;
+            }
+
+            String uuid = UUID.randomUUID().toString();
+            Optional<UserTable> optionalUserTable= userRepository.findById(Long.valueOf(phoneAndEmailVerificationRequest.getRequestId()));
+            if(optionalUserTable.isEmpty()){
+                responseData.setDescription("User cannot be validated");
+                responseData.setStatusCode(DEFAULT_STATUS_CODE);
+                return responseData;
+            }
+            UserTable userTable = optionalUserTable.get();
+            userTable.setEmailVerified(true);
+            userTable.setEmail(email);
+            Long userId = userRepository.save(userTable).getId();
+            String username = otpEntity.getUsername();
+            String requestId = String.valueOf(userId);
+            String jwToken = jwtHelper.createShortLiveToken(requestId, username, 30);
+            Map map = new HashMap();
+            map.put("emailAddress", username);
+            map.put("jwtToken", jwToken);
+
+            otpRepository.delete(otpEntity);
+
+            responseData.setStatusCode(SUCCESS_STATUS_CODE);
+            responseData.setDescription("Your email has been verified successfully!!");
+            responseData.setData(map);
+
+        } catch (Exception ex) {
+            ex.printStackTrace();
+        }
+        return responseData;
+
     }
 }
