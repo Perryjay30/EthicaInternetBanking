@@ -2,9 +2,7 @@ package com.payvantage.ethicainternetbanking.controller;
 
 import com.payvantage.ethicainternetbanking.data.dto.request.BvnVerificationRequest;
 import com.payvantage.ethicainternetbanking.data.dto.request.NinRequest;
-import com.payvantage.ethicainternetbanking.data.dto.request.NinRq;
 import com.payvantage.ethicainternetbanking.security.JWTHelper;
-import com.payvantage.ethicainternetbanking.service.IdentityVerificationService;
 import com.payvantage.ethicainternetbanking.service.OnboardingService;
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
@@ -12,6 +10,7 @@ import org.springframework.web.bind.annotation.*;
 
 @RestController
 @RequestMapping("/onboarding")
+@CrossOrigin(origins = "https://internetbanking.payvantageapi.com", allowedHeaders = "*", methods = {RequestMethod.GET, RequestMethod.POST, RequestMethod.PUT, RequestMethod.DELETE})
 public class OnboardingController {
 
     private final OnboardingService onboardingService;
