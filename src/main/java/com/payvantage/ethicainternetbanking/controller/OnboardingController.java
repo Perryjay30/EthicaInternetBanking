@@ -7,6 +7,8 @@ import com.payvantage.ethicainternetbanking.service.OnboardingService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
 
 @RestController
@@ -15,11 +17,8 @@ public class OnboardingController {
 
     private final OnboardingService onboardingService;
 
-    private final JWTHelper jwtHelper;
-
-    public OnboardingController(OnboardingService onboardingService, JWTHelper jwtHelper) {
+    public OnboardingController(OnboardingService onboardingService) {
         this.onboardingService = onboardingService;
-        this.jwtHelper = jwtHelper;
     }
 
     @PostMapping("/bvnVerification")
@@ -27,39 +26,35 @@ public class OnboardingController {
         return ResponseEntity.ok(onboardingService.bvnVerification(bvnVerificationRequest));
     }
 
-    @PostMapping("/ninVerification")
-    public ResponseEntity<?> ninVerification(@Valid @RequestHeader String authorization, @RequestBody NinRequest ninRequest) {
-        Long id = Long.valueOf(jwtHelper.getClaim(authorization, "userId"));
-        return ResponseEntity.ok(onboardingService.ninVerification(id, ninRequest));
+    @PostMapping("/ninVerification/{userUUID}")
+    public ResponseEntity<?> ninVerification(@PathVariable String userUUID, @RequestBody NinRequest ninRequest) {
+        return ResponseEntity.ok(onboardingService.ninVerification(userUUID, ninRequest));
     }
 
-    @PostMapping("/signUpWithPhoneNumber")
-    public ResponseEntity<?> signUpPhoneNumber(@Valid @RequestHeader("authorization") String authorization, @RequestBody SignUpWithPhoneNumberRequest initSignupPhoneNumber) {
-        Long id = Long.valueOf(jwtHelper.getClaim(authorization, "userId"));
-        BaseResponse responseData = onboardingService.initializeSignUpWithPhoneNumber(id, initSignupPhoneNumber.getPhoneNumber());
+    @PostMapping("/signUpWithPhoneNumber/{userUUID}")
+    public ResponseEntity<?> signUpPhoneNumber(@PathVariable String userUUID, @RequestBody SignUpWithPhoneNumberRequest initSignupPhoneNumber) {
+        BaseResponse responseData = onboardingService.initializeSignUpWithPhoneNumber(userUUID, initSignupPhoneNumber.getPhoneNumber());
         HttpStatus httpStatus = (responseData.getStatusCode() == 200) ? HttpStatus.OK : HttpStatus.CREATED;
         return new ResponseEntity<>(responseData, httpStatus);
     }
 
-    @PostMapping("/verifyPhoneNumber")
-    public ResponseEntity<?> verifyPhoneNumber(@Valid @RequestHeader("authorization") String authorization, @RequestBody PhoneAndEmailVerificationRequest phoneAndEmailVerificationRequest) {
-        Long id = Long.valueOf(jwtHelper.getClaim(authorization, "userId"));
-        BaseResponse responseData = onboardingService.verifyPhoneNumber(id, phoneAndEmailVerificationRequest);
+    @PostMapping("/verifyPhoneNumber/{userUUID}")
+    public ResponseEntity<?> verifyPhoneNumber(@PathVariable String userUUID, @RequestBody PhoneAndEmailVerificationRequest phoneAndEmailVerificationRequest) {
+        BaseResponse responseData = onboardingService.verifyPhoneNumber(userUUID, phoneAndEmailVerificationRequest);
         HttpStatus httpStatus = (responseData.getStatusCode() == 200) ? HttpStatus.OK : HttpStatus.BAD_REQUEST;
         return new ResponseEntity<>(responseData, httpStatus);
     }
 
-    @PostMapping("/signUpWithEmailAddress")
-    public ResponseEntity<?> signUpWithEmailAddress(@Valid @RequestHeader("authorization") String authorization, @RequestBody SignUpWithEmailRequest signUpWithEmailRequest) {
-        Long id = Long.valueOf(jwtHelper.getClaim(authorization, "userId"));
-        BaseResponse responseData = onboardingService.initializeSignUpWithEmailAddress(signUpWithEmailRequest.getEmailAddress(), id);
+    @PostMapping("/signUpWithEmailAddress/{userUUID}")
+    public ResponseEntity<?> signUpWithEmailAddress(@PathVariable String userUUID, @RequestBody SignUpWithEmailRequest signUpWithEmailRequest) {
+        BaseResponse responseData = onboardingService.initializeSignUpWithEmailAddress(userUUID, signUpWithEmailRequest.getEmailAddress());
         HttpStatus httpStatus = (responseData.getStatusCode() == 200) ? HttpStatus.OK : HttpStatus.CREATED;
         return new ResponseEntity<>(responseData, httpStatus);
     }
 
-    @PostMapping("/verifyEmailAddress")
-    public ResponseEntity<?> verifyEmailAddress(@Valid @RequestBody PhoneAndEmailVerificationRequest phoneAndEmailVerificationRequest) {
-        BaseResponse responseData = onboardingService.verifyEmail(phoneAndEmailVerificationRequest);
+    @PostMapping("/verifyEmailAddress/{userUUID}")
+    public ResponseEntity<?> verifyEmailAddress(@PathVariable String userUUID, @RequestBody PhoneAndEmailVerificationRequest phoneAndEmailVerificationRequest) {
+        BaseResponse responseData = onboardingService.verifyEmail(userUUID, phoneAndEmailVerificationRequest);
         HttpStatus httpStatus = (responseData.getStatusCode() == 200) ? HttpStatus.OK : HttpStatus.BAD_REQUEST;
         return new ResponseEntity<>(responseData, httpStatus);
     }

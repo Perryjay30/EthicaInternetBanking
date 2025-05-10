@@ -9,6 +9,7 @@ import com.payvantage.ethicainternetbanking.data.dto.response.NinResponse;
 import com.payvantage.ethicainternetbanking.data.model.*;
 import com.payvantage.ethicainternetbanking.repository.*;
 import com.payvantage.ethicainternetbanking.security.JWTHelper;
+import com.payvantage.ethicainternetbanking.security.JwtService;
 import com.payvantage.ethicainternetbanking.utils.AppConfig;
 import com.payvantage.ethicainternetbanking.utils.AppUtils;
 import lombok.extern.slf4j.Slf4j;
@@ -31,6 +32,8 @@ public class OnboardingServiceImpl implements OnboardingService {
 
     private final JWTHelper jwtHelper;
 
+    private final JwtService jwtService;
+
     private final NinDataRepository ninDataRepository;
 
     private final FaceDataRepository faceDataRepository;
@@ -45,10 +48,11 @@ public class OnboardingServiceImpl implements OnboardingService {
 
     private final AppConfig appConfig;
 
-    public OnboardingServiceImpl(BvnDataRepository bvnDataRepository, UserRepository userRepository, JWTHelper jwtHelper, NinDataRepository ninDataRepository, FaceDataRepository faceDataRepository, IdentityVerificationService identityVerificationService, AppUtils appUtils, NotificationService notificationService, OtpRepository otpRepository, AppConfig appConfig) {
+    public OnboardingServiceImpl(BvnDataRepository bvnDataRepository, UserRepository userRepository, JWTHelper jwtHelper, JwtService jwtService, NinDataRepository ninDataRepository, FaceDataRepository faceDataRepository, IdentityVerificationService identityVerificationService, AppUtils appUtils, NotificationService notificationService, OtpRepository otpRepository, AppConfig appConfig) {
         this.bvnDataRepository = bvnDataRepository;
         this.userRepository = userRepository;
         this.jwtHelper = jwtHelper;
+        this.jwtService = jwtService;
         this.ninDataRepository = ninDataRepository;
         this.faceDataRepository = faceDataRepository;
         this.identityVerificationService = identityVerificationService;
@@ -97,8 +101,8 @@ public class OnboardingServiceImpl implements OnboardingService {
             } else if (existingUserTable.isPresent() && existingUserTable.get().getTranxPin() == null) {
                 baseResponse.setDescription("BVN already verified, Verify your NIN!!");
                 Map<String, String> resp = new HashMap<>();
-                String auth = jwtHelper.createShortLiveToken(String.valueOf(existingUserTable.get().getId()), existingUserTable.get().getBvn(), 30);
-                resp.put("jwt", auth);
+//                String auth = jwtHelper.createShortLiveToken(String.valueOf(existingUserTable.get().getId()), existingUserTable.get().getBvn(), 30);
+                resp.put("userToken", String.valueOf(existingUserTable.get().getUserUUID()));
                 baseResponse.setData(resp);
                 baseResponse.setStatusCode(200);
                 return baseResponse;
@@ -141,14 +145,17 @@ public class OnboardingServiceImpl implements OnboardingService {
             newUserTable.setFirstName(bvnData.getFirstName());
             newUserTable.setLastName(bvnData.getLastName());
             newUserTable.setMiddleName(bvnData.getMiddleName());
+            newUserTable.setUserUUID(UUID.randomUUID().toString());
             newUserTable.setBvnVerified(true);
             newUserTable.setDateOfBirth(bvnData.getDateOfBirth());
+            newUserTable.setUserRole(UserRole.USER);
             userRepository.save(newUserTable);
 
             Map<String, String> resp = new HashMap<>();
-            String auth = jwtHelper.createShortLiveToken(String.valueOf(newUserTable.getId()), newUserTable.getBvn(), 30);
+//            String auth = jwtHelper.createShortLiveToken(String.valueOf(newUserTable.getId()), newUserTable.getBvn(), 30);
+//            String auth = jwtService.generateToken(newUserTable.getBvn());
             baseResponse.setDescription("BVN verified successfully");
-            resp.put("jwt", auth);
+            resp.put("userToken", String.valueOf(newUserTable.getUserUUID()));
             baseResponse.setData(resp);
             baseResponse.setStatusCode(200);
             return baseResponse;
@@ -162,7 +169,7 @@ public class OnboardingServiceImpl implements OnboardingService {
     }
 
     @Override
-    public BaseResponse ninVerification(Long id, NinRequest ninRq) {
+    public BaseResponse ninVerification(String userUUID, NinRequest ninRq) {
         BaseResponse baseResponse = new BaseResponse();
         baseResponse.setStatusCode(500);
         baseResponse.setDescription("An error occurred");
@@ -182,7 +189,7 @@ public class OnboardingServiceImpl implements OnboardingService {
 
             NinData ninRpData = null;
             Optional<NinData> optNinRpData = ninDataRepository.findByNin(ninRq1.getNumber());
-            Optional<UserTable> optionalUserTable = userRepository.findById(id);
+            Optional<UserTable> optionalUserTable = userRepository.findByUserUUID(userUUID);
             if (optionalUserTable.isPresent() && optionalUserTable.get().getNin() != null && optionalUserTable.get().getTranxPin() != null) {
                 baseResponse.setDescription("NIN already linked to a user, kindly proceed to login if you're the user!!");
                 baseResponse.setStatusCode(200);
@@ -190,10 +197,14 @@ public class OnboardingServiceImpl implements OnboardingService {
             } else if (optionalUserTable.isPresent() && optionalUserTable.get().getNin() != null && optionalUserTable.get().getTranxPin() == null) {
                 baseResponse.setDescription("NIN already verified, Verify your phone number!!");
                 Map<String, String> resp = new HashMap<>();
-                String auth = jwtHelper.createShortLiveToken(String.valueOf(optionalUserTable.get().getId()), optionalUserTable.get().getNin(), 30);
-                resp.put("jwt", auth);
+                resp.put("userToken", String.valueOf(optionalUserTable.get().getUserUUID()));
+//                String auth = jwtHelper.createShortLiveToken(String.valueOf(optionalUserTable.get().getId()), optionalUserTable.get().getNin(), 30);
                 baseResponse.setData(resp);
                 baseResponse.setStatusCode(200);
+                return baseResponse;
+            } else if (optionalUserTable.isEmpty()) {
+                baseResponse.setStatusCode(400);
+                baseResponse.setDescription("NIN verification failed, User not found");
                 return baseResponse;
             }
 
@@ -225,11 +236,12 @@ public class OnboardingServiceImpl implements OnboardingService {
             existingUser.setResidentialAddress(ninRpData.getResidence_address());
             userRepository.save(existingUser);
 
-            Map<String, String> resp = new HashMap<>();
-            String auth = jwtHelper.createShortLiveToken(String.valueOf(existingUser.getId()), existingUser.getNin(), 30);
+//            Map<String, String> resp = new HashMap<>();
+//            String auth = jwtService.generateToken(optionalUserTable.get().getBvn());
+//            String auth = jwtHelper.createShortLiveToken(String.valueOf(existingUser.getId()), existingUser.getNin(), 30);
             baseResponse.setDescription("NIN verified successfully");
-            resp.put("jwt", auth);
-            baseResponse.setData(resp);
+//            resp.put("userId", String.valueOf(existingUser.getId()));
+//            baseResponse.setData(resp);
             baseResponse.setStatusCode(200);
             return baseResponse;
         } catch (Exception ex) {
@@ -242,12 +254,12 @@ public class OnboardingServiceImpl implements OnboardingService {
     }
 
     @Override
-    public BaseResponse initializeSignUpWithPhoneNumber(Long id, String phoneNumber) {
+    public BaseResponse initializeSignUpWithPhoneNumber(String userUUID, String phoneNumber) {
         BaseResponse responseData = new BaseResponse();
         responseData.setStatusCode(200);
         responseData.setDescription("An error occurred, try again later");
         try{
-            Optional<UserTable> userTableOptional = userRepository.findById(id);
+            Optional<UserTable> userTableOptional = userRepository.findByUserUUID(userUUID);
             if (userTableOptional.isPresent()) {
                 String cleanedPhoneNumber = phoneNumber
                         .substring(phoneNumber.length() - 10);
@@ -287,14 +299,12 @@ public class OnboardingServiceImpl implements OnboardingService {
                 Optional<UserTable> optionalUser = userRepository.findByPhoneNumberAndPhoneNumberVerifiedTrue(cleanedPhoneNumber);
                 if(optionalUser.isPresent()){
                     UserTable existingUser = optionalUser.get();
-                    String requestId = existingUser.getId().toString();
-                    boolean phoneNumberVerified = existingUser.isPhoneNumberVerified();
-
-                    String jwToken = jwtHelper.createShortLiveToken(requestId, cleanedPhoneNumber, 30);
+//                    String requestId = existingUser.getId().toString();
+//                    boolean phoneNumberVerified = existingUser.isPhoneNumberVerified();
+//
+//                    String jwToken = jwtHelper.createShortLiveToken(requestId, cleanedPhoneNumber, 30);
                     Map<Object, Object> map = new HashMap<Object, Object>();
-                    map.put("phoneNumber", cleanedPhoneNumber);
-                    map.put("jwtToken", jwToken);
-                    map.put("phoneNumberVerified", phoneNumberVerified);
+                    map.put("userToken", existingUser.getUserUUID());
                     responseData.setDescription("PhoneNumber already verified, proceed to email verification");
                     responseData.setStatusCode(210);
                     responseData.setData(map);
@@ -306,17 +316,6 @@ public class OnboardingServiceImpl implements OnboardingService {
                             JsonObject.class);
                     String otp = otpResponseData.get("otp").getAsString();
                     String requestId = otpResponseData.get("requestId").getAsString();
-//                    Optional<InitializeSignUp> existingInit = initializeSignUpRepo.findByPhoneNumber(cleanedPhoneNumber);
-//                    InitializeSignUp initSignUp;
-//
-//                    if (existingInit.isPresent()) {
-//                        initSignUp = existingInit.get();
-//                        initSignUp.setPhoneNumber(cleanedPhoneNumber);
-//                    } else {
-//                        initSignUp = new InitializeSignUp();
-//                        initSignUp.setPhoneNumber(cleanedPhoneNumber);
-//                    }
-//                    initializeSignUpRepo.save(initSignUp);
                     String optMsg = "Your otp is " + otp;
                     notificationService.sendSms(phoneNumber, otp);
 
@@ -342,12 +341,12 @@ public class OnboardingServiceImpl implements OnboardingService {
     }
 
     @Override
-    public BaseResponse verifyPhoneNumber(Long id, PhoneAndEmailVerificationRequest phoneAndEmailVerificationRequest) {
+    public BaseResponse verifyPhoneNumber(String userUUID, PhoneAndEmailVerificationRequest phoneAndEmailVerificationRequest) {
         BaseResponse responseData = new BaseResponse();
         responseData.setStatusCode(VALDATION_STATUS_CODE);
         responseData.setDescription(DEFAULT_STATUS_MESSAGE);
         try {
-            Optional<UserTable> userTableOptional = userRepository.findById(id);
+            Optional<UserTable> userTableOptional = userRepository.findByUserUUID(userUUID);
             if (userTableOptional.isPresent()) {
                 String phonenumber = phoneAndEmailVerificationRequest.getPhoneNumber()
                         .substring(phoneAndEmailVerificationRequest.getPhoneNumber().length() - 10);
@@ -379,18 +378,17 @@ public class OnboardingServiceImpl implements OnboardingService {
                 String username = otpEntity.getUsername();
                 userTable.setPhoneNumber(username);
                 userTable.setPhoneNumberVerified(true);
-                Long requestId = userRepository.save(userTable).getId();
-                String jwToken = jwtHelper.createShortLiveToken(String.valueOf(requestId), username, 30);
-                Map map = new HashMap();
-                map.put("phoneNumber", username);
-                map.put("jwtToken", jwToken);
-                map.put("requestId", requestId);
+                userRepository.save(userTable);
+//                String jwToken = jwtHelper.createShortLiveToken(String.valueOf(requestId), username, 30);
+//                Map map = new HashMap();
+//                map.put("phoneNumber", username);
+//                map.put("jwtToken", jwToken);
+//                map.put("requestId", requestId);
 
                 otpRepository.delete(otpEntity);
 
                 responseData.setStatusCode(SUCCESS_STATUS_CODE);
                 responseData.setDescription("Phone number verified successfully");
-                responseData.setData(map);
             } else {
                 responseData.setDescription("User not found!!");
                 responseData.setStatusCode(VALDATION_STATUS_CODE);
@@ -404,7 +402,7 @@ public class OnboardingServiceImpl implements OnboardingService {
     }
 
     @Override
-    public BaseResponse initializeSignUpWithEmailAddress(String emailAddress, Long Id) {
+    public BaseResponse initializeSignUpWithEmailAddress(String userUUID, String emailAddress) {
         BaseResponse responseData = new BaseResponse();
         responseData.setStatusCode(VALDATION_STATUS_CODE);
         responseData.setDescription(DEFAULT_STATUS_MESSAGE);
@@ -420,14 +418,8 @@ public class OnboardingServiceImpl implements OnboardingService {
             Optional<UserTable> optionalUser = userRepository.findByEmailAndEmailVerifiedTrue(emailAddress);
             if(optionalUser.isPresent()) {
                 UserTable existingUser = optionalUser.get();
-                String requestId = existingUser.getId().toString();
-                boolean emailVerified = existingUser.isEmailVerified();
-                String phoneNumber = existingUser.getPhoneNumber();
-                String jwToken = jwtHelper.createShortLiveToken(requestId, phoneNumber, 30);
-                Map map = new HashMap();
-                map.put("emailAddress", emailAddress);
-                map.put("jwtToken", jwToken);
-                map.put("emailVerified", emailVerified);
+                Map<String, Object> map = new HashMap<>();
+                map.put("userToken", existingUser.getUserUUID());
                 responseData.setDescription("Email already verified, proceed to next stage");
                 responseData.setStatusCode(202);
                 responseData.setData(map);
@@ -439,9 +431,9 @@ public class OnboardingServiceImpl implements OnboardingService {
                 maskeEmail = appUtils.maskedEmail(emailAddress);
                 msg += "email " + maskeEmail;
             }
-            Map resp = new HashMap<>();
+            Map<String, Object> resp = new HashMap<>();
 
-            Optional<UserTable> findUser = userRepository.findById(Id);
+            Optional<UserTable> findUser = userRepository.findByUserUUID(userUUID);
             UserTable userTable = findUser.get();
 
 
@@ -484,7 +476,7 @@ public class OnboardingServiceImpl implements OnboardingService {
         return responseData;
     }
 
-    public BaseResponse verifyEmail(PhoneAndEmailVerificationRequest phoneAndEmailVerificationRequest) {
+    public BaseResponse verifyEmail(String userUUID, PhoneAndEmailVerificationRequest phoneAndEmailVerificationRequest) {
         BaseResponse responseData = new BaseResponse();
         responseData.setStatusCode(VALDATION_STATUS_CODE);
         responseData.setDescription(DEFAULT_STATUS_MESSAGE);
@@ -513,8 +505,7 @@ public class OnboardingServiceImpl implements OnboardingService {
                 return responseData;
             }
 
-            String uuid = UUID.randomUUID().toString();
-            Optional<UserTable> optionalUserTable= userRepository.findById(Long.valueOf(phoneAndEmailVerificationRequest.getRequestId()));
+            Optional<UserTable> optionalUserTable= userRepository.findByUserUUID(userUUID);
             if(optionalUserTable.isEmpty()){
                 responseData.setDescription("User cannot be validated");
                 responseData.setStatusCode(DEFAULT_STATUS_CODE);
@@ -525,12 +516,9 @@ public class OnboardingServiceImpl implements OnboardingService {
             userTable.setEmail(email);
             Long userId = userRepository.save(userTable).getId();
             String username = otpEntity.getUsername();
-            String requestId = String.valueOf(userId);
-            String jwToken = jwtHelper.createShortLiveToken(requestId, username, 30);
-            Map map = new HashMap();
-            map.put("emailAddress", username);
+            String jwToken = jwtService.generateToken(username);
+            Map<String, Object> map = new HashMap<>();
             map.put("jwtToken", jwToken);
-
             otpRepository.delete(otpEntity);
 
             responseData.setStatusCode(SUCCESS_STATUS_CODE);

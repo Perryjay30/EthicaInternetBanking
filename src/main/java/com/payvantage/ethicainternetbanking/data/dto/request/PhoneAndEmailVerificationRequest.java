@@ -7,7 +7,6 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 public class PhoneAndEmailVerificationRequest {
     private String otp;
-    private String requestId;
     private String phoneNumber;
     private String email;
 }

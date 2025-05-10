@@ -9,14 +9,14 @@ public interface OnboardingService {
 
     BaseResponse bvnVerification(BvnVerificationRequest bvnVerificationRequest);
 
-    BaseResponse ninVerification(Long id, NinRequest ninRq);
+    BaseResponse ninVerification(String userUUID, NinRequest ninRq);
 
-    BaseResponse initializeSignUpWithPhoneNumber(Long id, String phoneNumber);
+    BaseResponse initializeSignUpWithPhoneNumber(String userUUID, String phoneNumber);
 
-    BaseResponse verifyPhoneNumber(Long id, PhoneAndEmailVerificationRequest phoneAndEmailVerificationRequest);
+    BaseResponse verifyPhoneNumber(String userUUID, PhoneAndEmailVerificationRequest phoneAndEmailVerificationRequest);
 
-    BaseResponse initializeSignUpWithEmailAddress(String emailAddress, Long id);
+    BaseResponse initializeSignUpWithEmailAddress(String userUUID, String emailAddress);
 
-    BaseResponse verifyEmail(PhoneAndEmailVerificationRequest phoneAndEmailVerificationRequest);
+    BaseResponse verifyEmail(String userUUID, PhoneAndEmailVerificationRequest phoneAndEmailVerificationRequest);
 
 }

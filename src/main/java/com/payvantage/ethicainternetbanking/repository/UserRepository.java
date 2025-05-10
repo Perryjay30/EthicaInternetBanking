@@ -27,6 +27,8 @@ public interface UserRepository extends JpaRepository<UserTable, Long> {
 
     Optional<UserTable> findByEmail(String phoneNumber);
 
+    Optional<UserTable> findByUserUUID(String userUUID);
+
     //Optional<UserTable> findByPhoneNumberAndPhoneNumberVerifiedTrueAndDeviceId(String phoneNumber, String deviceId);
     
     @Query("select u from UserTable u where (u.phoneNumber =:phoneNumber) and u.active=true and u.phoneNumberVerified=true and u.deviceId=:deviceId")

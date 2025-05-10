@@ -12,11 +12,14 @@ import com.auth0.jwt.algorithms.Algorithm;
 import com.auth0.jwt.exceptions.JWTCreationException;
 import com.auth0.jwt.exceptions.JWTVerificationException;
 import com.auth0.jwt.interfaces.DecodedJWT;
+import io.jsonwebtoken.io.Decoders;
+import io.jsonwebtoken.security.Keys;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.core.env.Environment;
 import org.springframework.stereotype.Component;
 
+import java.security.Key;
 import java.util.Calendar;
 import java.util.Date;
 import java.util.Objects;
@@ -103,6 +106,11 @@ public class JWTHelper {
             LOG.info(exception.getMessage());
         }
         return null;
+    }
+
+    private Key getSignKey() {
+        byte [] keyBytes = Decoders.BASE64URL.decode(environment.getProperty("jwt.secret.key"));
+        return Keys.hmacShaKeyFor(keyBytes);
     }
 
 }
